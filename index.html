@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#080b0d">
+  <meta name="description" content="Zeig mal! – Fotografiert Begriffe in eurer Umgebung und sammelt gemeinsam Punkte.">
+  <title>Zeig mal!</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#app">Zum Inhalt</a>
+  <div id="offline-banner" class="offline-banner" hidden>Keine Verbindung – Verbindung wird wiederhergestellt …</div>
+  <header class="topbar">
+    <button id="brand-home" class="brand" type="button" aria-label="Zur Startseite">
+      <svg class="brand-mark" viewBox="0 0 48 48" role="img" aria-label="Zeig mal!">
+        <path d="M4 24c5.4-8 12-12 20-12s14.6 4 20 12c-5.4 8-12 12-20 12S9.4 32 4 24Z" fill="none" stroke="currentColor" stroke-width="4"/>
+        <circle cx="24" cy="24" r="7" fill="currentColor"/>
+        <circle cx="38" cy="12" r="5" fill="#FFCB03"/>
+      </svg>
+      <span>Zeig mal!</span>
+    </button>
+    <div class="topbar-meta">
+      <button id="score-button" class="icon-button" type="button" aria-label="Punktestand anzeigen" hidden>★</button>
+      <span id="room-pill" class="room-pill" hidden>Code <strong id="room-code-small">–</strong></span>
+      <span id="connection-dot" class="connection-dot" aria-label="Verbindungsstatus"></span>
+    </div>
+  </header>
+
+  <main id="app" class="app-shell" tabindex="-1" aria-live="polite">
+    <noscript>Für „Zeig mal!“ muss JavaScript aktiviert sein.</noscript>
+    <section class="screen loading-screen">
+      <div class="loader" aria-hidden="true"></div>
+      <p>Spiel wird geladen …</p>
+    </section>
+  </main>
+
+  <div id="modal-root"></div>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+
+  <template id="home-template">
+    <section class="screen home-screen">
+      <div class="intro-mark" aria-hidden="true">
+        <span>Z</span><span>E</span><span>I</span><span>G</span>
+      </div>
+      <div class="hero-copy">
+        <p class="eyebrow">30 Sekunden. Ein Motiv.</p>
+        <h1>Zeig mal!</h1>
+        <p>Findet den Begriff in eurer Umgebung, macht ein Foto und entscheidet gemeinsam, wer einen Punkt bekommt.</p>
+      </div>
+      <div class="action-stack">
+        <button class="button button-primary" data-action="show-create">Spiel starten</button>
+        <button class="button button-secondary" data-action="show-join">Spiel beitreten</button>
+      </div>
+      <button class="text-button" data-action="show-rules">So funktioniert’s</button>
+      <p id="setup-note" class="setup-note" hidden></p>
+    </section>
+  </template>
+
+  <template id="name-template">
+    <section class="screen form-screen">
+      <button class="back-button" data-action="home" aria-label="Zurück">←</button>
+      <div><p class="eyebrow" id="form-eyebrow">Neues Spiel</p><h1 id="form-title">Wie heißt du?</h1></div>
+      <form id="entry-form" class="entry-form" novalidate>
+        <div id="code-field" class="field" hidden>
+          <label for="room-code">Spielcode</label>
+          <input id="room-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{4}" maxlength="4" placeholder="0000">
+        </div>
+        <div class="field">
+          <label for="player-name">Dein Name</label>
+          <input id="player-name" name="name" autocomplete="nickname" maxlength="24" placeholder="Name" required>
+        </div>
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+        <button class="button button-primary" type="submit">Weiter</button>
+      </form>
+    </section>
+  </template>
+
+  <template id="lobby-template">
+    <section class="screen lobby-screen">
+      <div class="room-code-block">
+        <p class="eyebrow">Spielcode</p>
+        <button id="copy-code" class="big-code" aria-label="Spielcode kopieren">0000</button>
+        <p>Gib diesen Code an deine Mitspieler weiter.</p>
+      </div>
+      <div class="section-heading"><h1>Warteraum</h1><span id="player-count" class="count-badge">1 / 8</span></div>
+      <ul id="lobby-list" class="player-list" aria-label="Mitspieler"></ul>
+      <p class="privacy-note">Fotos sind während der Auswertung für alle Mitspielenden sichtbar und werden vor der nächsten Runde gelöscht.</p>
+      <div id="lobby-actions" class="sticky-actions"></div>
+    </section>
+  </template>
+
+  <template id="prompt-template">
+    <section class="screen prompt-screen">
+      <div class="round-meta"><span id="prompt-round">Runde 1</span><span id="prompt-author" class="tag"></span></div>
+      <div><p class="eyebrow">Neuer Begriff</p><h1 id="prompt-title">Was sollen die anderen finden?</h1></div>
+      <form id="prompt-form" class="prompt-form" novalidate>
+        <div class="field">
+          <label for="prompt-input">Dein Begriff oder deine Aufgabe</label>
+          <textarea id="prompt-input" maxlength="80" rows="4" placeholder="Zum Beispiel: ein halbvolles Glas"></textarea>
+          <span id="prompt-count" class="char-count">0 / 80</span>
+        </div>
+        <p id="prompt-error" class="form-error" role="alert" hidden></p>
+        <button class="button button-primary" type="submit">Runde starten</button>
+      </form>
+      <div id="prompt-wait" class="phase-message" hidden></div>
+    </section>
+  </template>
+
+  <template id="play-template">
+    <section class="screen round-screen">
+      <div class="round-meta">
+        <span id="round-label">Runde 1</span>
+        <div id="timer" class="timer" aria-label="Verbleibende Zeit"><span>30</span></div>
+      </div>
+      <article class="prompt-card">
+        <p class="eyebrow">Zeig mal …</p>
+        <h1 id="prompt-text"></h1>
+      </article>
+      <div id="play-content" class="round-content"></div>
+    </section>
+  </template>
+
+  <template id="scoring-template">
+    <section class="screen scoring-screen">
+      <div><p class="eyebrow">Fotos bewerten</p><h1>Wer bekommt einen Punkt?</h1><p>Markiere alle Fotos, die den Begriff erfüllen. Auch niemand ist eine gültige Wahl.</p></div>
+      <div id="gallery-loading" class="phase-message"><div class="loader" aria-hidden="true"></div><p>Fotos werden geladen …</p></div>
+      <form id="scoring-form" hidden>
+        <div id="photo-gallery" class="photo-gallery"></div>
+        <p id="scoring-warning" class="form-error" role="alert" hidden></p>
+        <div class="sticky-actions"><button class="button button-primary" type="submit">Auswahl bestätigen</button></div>
+      </form>
+      <div id="scoring-wait" class="phase-message" hidden></div>
+    </section>
+  </template>
+
+  <template id="results-template">
+    <section class="screen results-screen">
+      <div><p class="eyebrow">Rundenergebnis</p><h1 id="result-title">Punktestand</h1><p id="winner-copy" class="winner-copy"></p></div>
+      <ol id="leaderboard" class="leaderboard"></ol>
+      <p class="phase-message compact">Die nächste Runde beginnt gleich.</p>
+      <div id="result-actions" class="sticky-actions"></div>
+    </section>
+  </template>
+
+  <template id="ended-template">
+    <section class="screen ended-screen">
+      <p class="eyebrow">Spiel beendet</p><h1>Das war’s.</h1>
+      <p id="final-winner-copy" class="winner-copy"></p>
+      <ol id="final-leaderboard" class="leaderboard"></ol>
+      <div id="ended-actions" class="sticky-actions"></div>
+    </section>
+  </template>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

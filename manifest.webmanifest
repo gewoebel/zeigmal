@@ -1,0 +1,15 @@
+{
+  "name": "Zeig mal! – das Foto-Spiel",
+  "short_name": "Zeig mal!",
+  "description": "Findet Begriffe in eurer Umgebung, fotografiert sie und sammelt Punkte.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#080b0d",
+  "theme_color": "#080b0d",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
