@@ -3,7 +3,7 @@
  * „HIER_EINTRAGEN“ in der Prüfzeile darunter bleibt unverändert.
  */
 export const firebaseConfig = {
-  apiKey: ""AIzaSyD46SxH_WmlxMMv432by-7XLUr0R1zW_6U"",
+  apiKey: "AIzaSyD46SxH_WmlxMMv432by-7XLUr0R1zW_6U",
   authDomain: "zeig-mal-spiel.firebaseapp.com",
   databaseURL: "https://zeig-mal-spiel-default-rtdb.europe-west1.firebasedatabase.app/",
   projectId: "zeig-mal-spiel",
