@@ -252,13 +252,22 @@ function renderPrompt() {
   const view = clone("#prompt-template");
   $("#prompt-round", view).textContent = `Runde ${state.room.round}`;
   $("#prompt-author", view).textContent = playerName(state.room.promptGiverId);
-  const form = $("#prompt-form", view); const wait = $("#prompt-wait", view);
+
+  const form = $("#prompt-form", view);
+  const wait = $("#prompt-wait", view);
+
   if (isPromptGiver()) {
-    const input = $("#prompt-input", view); input.value = state.draftPrompt; $("#prompt-count", view).textContent = `${input.value.length} / 80`;
+    form.hidden = false;
+    wait.hidden = true;
+    const input = $("#prompt-input", view);
+    input.value = state.draftPrompt;
+    $("#prompt-count", view).textContent = `${input.value.length} / 80`;
   } else {
-    form.hidden = true; wait.hidden = false;
-    wait.innerHTML = `<div class="waiting-eye" aria-hidden="true">◉</div><p><strong>${escapeHtml(playerName(state.room.promptGiverId))}</strong> überlegt sich einen Begriff.</p>`;
+    form.hidden = true;
+    wait.hidden = false;
+    wait.innerHTML = `<div class="waiting-eye" aria-hidden="true">◉</div><p><strong>${escapeHtml(playerName(state.room.promptGiverId))}</strong> gibt gerade den Begriff für diese Runde ein.</p>`;
   }
+
   setScreen(view);
   if (isPromptGiver()) setTimeout(() => $("#prompt-input")?.focus(), 100);
 }
@@ -361,34 +370,119 @@ async function advancePhase(nextStatus) {
 
 function renderScoring() {
   const view = clone("#scoring-template");
-  if (!isPromptGiver()) {
-    $("#gallery-loading", view).hidden = true; $("#scoring-wait", view).hidden = false;
-    $("#scoring-wait", view).innerHTML = `<div class="waiting-eye" aria-hidden="true">◉</div><p><strong>${escapeHtml(playerName(state.room.promptGiverId))}</strong> bewertet gerade die Fotos.</p>`;
+  const isJudge = isPromptGiver();
+
+  const wait = $("#scoring-wait", view);
+  const loading = $("#gallery-loading", view);
+  const form = $("#scoring-form", view);
+
+  if (wait) wait.hidden = true;
+  if (loading) loading.hidden = false;
+  if (form) form.hidden = true;
+
+  if (!isJudge && wait) {
+    wait.hidden = false;
+    wait.innerHTML = `<div class="waiting-eye" aria-hidden="true">◉</div><p><strong>${escapeHtml(playerName(state.room.promptGiverId))}</strong> bewertet gleich die Fotos. Du kannst sie schon ansehen.</p>`;
   }
+
   setScreen(view);
-  if (isPromptGiver()) loadGallery();
+  loadGallery();
 }
 async function loadGallery() {
-  if (state.galleryLoading) return; state.galleryLoading = true;
+  if (state.galleryLoading) return;
+  state.galleryLoading = true;
+
   try {
     const photos = (await state.api.get(photosRef())).val() || {};
     if (state.room.status !== "scoring") return;
-    const gallery = document.querySelector("#photo-gallery"); const form = document.querySelector("#scoring-form"); const loading = document.querySelector("#gallery-loading");
+
+    const gallery = document.querySelector("#photo-gallery");
+    const form = document.querySelector("#scoring-form");
+    const loading = document.querySelector("#gallery-loading");
+    const wait = document.querySelector("#scoring-wait");
+    const isJudge = isPromptGiver();
+
     if (!gallery || !form || !loading) return;
-    const entries = Object.entries(photos).filter(([uid]) => uid !== state.room.promptGiverId && state.room.players?.[uid]);
-    if (!entries.length) gallery.innerHTML = `<div class="empty-state"><strong>Keine Fotos eingegangen</strong><p>Bestätige die Runde ohne Gewinner.</p></div>`;
-    entries.forEach(([uid, photo]) => gallery.append(createPhotoOption(uid, photo)));
-    loading.hidden = true; form.hidden = false; state.galleryRound = state.room.round;
-  } catch (error) { const loading = document.querySelector("#gallery-loading"); if (loading) loading.innerHTML = `<p class="form-error">${escapeHtml(friendlyError(error))}</p>`; }
-  finally { state.galleryLoading = false; }
+
+    gallery.replaceChildren();
+
+    const entries = Object.entries(photos).filter(
+      ([uid]) => uid !== state.room.promptGiverId && state.room.players?.[uid]
+    );
+
+    if (!entries.length) {
+      gallery.innerHTML = `<div class="empty-state"><strong>Keine Fotos eingegangen</strong><p>${isJudge ? "Bestätige die Runde ohne Gewinner." : "In dieser Runde wurden keine Fotos eingereicht."}</p></div>`;
+    } else {
+      entries.forEach(([uid, photo]) => {
+        gallery.append(createPhotoOption(uid, photo, isJudge));
+      });
+    }
+
+    loading.hidden = true;
+    if (wait) wait.hidden = isJudge;
+    form.hidden = !isJudge;
+    state.galleryRound = state.room.round;
+  } catch (error) {
+    const loading = document.querySelector("#gallery-loading");
+    if (loading) loading.innerHTML = `<p class="form-error">${escapeHtml(friendlyError(error))}</p>`;
+  } finally {
+    state.galleryLoading = false;
+  }
 }
-function createPhotoOption(uid, photo) {
-  const item = document.createElement("label"); item.className = "photo-option";
-  const input = document.createElement("input"); input.type = "checkbox"; input.name = "winner"; input.value = uid;
-  const image = document.createElement("img"); image.src = photo.data; image.alt = `Foto von ${playerName(uid)}`; image.loading = "lazy"; image.addEventListener("click", (event) => { event.preventDefault(); openPhoto(photo.data, playerName(uid)); });
-  const footer = document.createElement("span"); footer.className = "photo-footer"; footer.innerHTML = `<span class="photo-check">✓</span><strong>${escapeHtml(playerName(uid))}</strong><button type="button" class="zoom-button" aria-label="Foto von ${escapeHtml(playerName(uid))} vergrößern">↗</button>`;
-  $("button", footer).addEventListener("click", (event) => { event.preventDefault(); openPhoto(photo.data, playerName(uid)); });
-  item.append(input, image, footer); return item;
+function createPhotoOption(uid, photo, selectable = true) {
+  const player = playerName(uid);
+
+  if (!selectable) {
+    const item = document.createElement("article");
+    item.className = "photo-option readonly-photo";
+
+    const image = document.createElement("img");
+    image.src = photo.data;
+    image.alt = `Foto von ${player}`;
+    image.loading = "lazy";
+    image.addEventListener("click", () => openPhoto(photo.data, player));
+
+    const footer = document.createElement("div");
+    footer.className = "photo-footer";
+    footer.innerHTML = `<strong>${escapeHtml(player)}</strong><button type="button" class="zoom-button" aria-label="Foto von ${escapeHtml(player)} vergrößern">↗</button>`;
+
+    $("button", footer).addEventListener("click", (event) => {
+      event.preventDefault();
+      openPhoto(photo.data, player);
+    });
+
+    item.append(image, footer);
+    return item;
+  }
+
+  const item = document.createElement("label");
+  item.className = "photo-option";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.name = "winner";
+  input.value = uid;
+
+  const image = document.createElement("img");
+  image.src = photo.data;
+  image.alt = `Foto von ${player}`;
+  image.loading = "lazy";
+  image.addEventListener("click", (event) => {
+    event.preventDefault();
+    openPhoto(photo.data, player);
+  });
+
+  const footer = document.createElement("span");
+  footer.className = "photo-footer";
+  footer.innerHTML = `<span class="photo-check">✓</span><strong>${escapeHtml(player)}</strong><button type="button" class="zoom-button" aria-label="Foto von ${escapeHtml(player)} vergrößern">↗</button>`;
+
+  $("button", footer).addEventListener("click", (event) => {
+    event.preventDefault();
+    openPhoto(photo.data, player);
+  });
+
+  item.append(input, image, footer);
+  return item;
 }
 function openPhoto(src, name) { showModal(`Foto von ${name}`, `<img class="photo-large" src="${src}" alt="Foto von ${escapeHtml(name)}">`, [{ label: "Schließen", className: "button-primary", action: closeModal }]); }
 async function submitScoring(form) {
