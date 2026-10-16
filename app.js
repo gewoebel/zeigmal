@@ -250,26 +250,33 @@ async function startNextRound(index) {
 
 function renderPrompt() {
   const view = clone("#prompt-template");
-  $("#prompt-round", view).textContent = `Runde ${state.room.round}`;
-  $("#prompt-author", view).textContent = playerName(state.room.promptGiverId);
+  const promptGiver = isPromptGiver();
+  const promptGiverName = playerName(state.room.promptGiverId);
 
+  $("#prompt-round", view).textContent = `Runde ${state.room.round}`;
+  $("#prompt-author", view).textContent = promptGiverName;
+
+  const title = $("#prompt-title", view);
   const form = $("#prompt-form", view);
   const wait = $("#prompt-wait", view);
 
-  if (isPromptGiver()) {
-    form.hidden = false;
-    wait.hidden = true;
+  form.hidden = !promptGiver;
+  wait.hidden = promptGiver;
+
+  if (promptGiver) {
+    title.textContent = "Was sollen die anderen finden?";
     const input = $("#prompt-input", view);
     input.value = state.draftPrompt;
     $("#prompt-count", view).textContent = `${input.value.length} / 80`;
   } else {
-    form.hidden = true;
-    wait.hidden = false;
-    wait.innerHTML = `<div class="waiting-eye" aria-hidden="true">◉</div><p><strong>${escapeHtml(playerName(state.room.promptGiverId))}</strong> gibt gerade den Begriff für diese Runde ein.</p>`;
+    // Nicht nur ausblenden: Das Eingabeformular wird für alle anderen ganz aus dem DOM entfernt.
+    form.remove();
+    title.textContent = `${promptGiverName} denkt sich etwas aus …`;
+    wait.innerHTML = `<div class="waiting-eye" aria-hidden="true">◉</div><p><strong>${escapeHtml(promptGiverName)}</strong> gibt gerade den Begriff für diese Runde ein.</p>`;
   }
 
   setScreen(view);
-  if (isPromptGiver()) setTimeout(() => $("#prompt-input")?.focus(), 100);
+  if (promptGiver) setTimeout(() => $("#prompt-input")?.focus(), 100);
 }
 async function submitPrompt(form) {
   if (!isPromptGiver() || state.room.status !== "prompt") return;
@@ -371,18 +378,28 @@ async function advancePhase(nextStatus) {
 function renderScoring() {
   const view = clone("#scoring-template");
   const isJudge = isPromptGiver();
+  const promptGiverName = playerName(state.room.promptGiverId);
 
+  const intro = $(".scoring-screen > div:first-child", view);
+  const title = $("h1", intro);
+  const description = $("p:last-child", intro);
   const wait = $("#scoring-wait", view);
   const loading = $("#gallery-loading", view);
   const form = $("#scoring-form", view);
 
-  if (wait) wait.hidden = true;
-  if (loading) loading.hidden = false;
-  if (form) form.hidden = true;
+  wait.hidden = true;
+  loading.hidden = false;
+  loading.setAttribute("aria-busy", "true");
+  form.hidden = true;
 
-  if (!isJudge && wait) {
+  if (isJudge) {
+    title.textContent = "Wer bekommt einen Punkt?";
+    description.textContent = "Markiere alle Fotos, die den Begriff erfüllen. Auch niemand ist eine gültige Wahl.";
+  } else {
+    title.textContent = "Die Fotos sind da";
+    description.textContent = `Du kannst alle Fotos ansehen. ${promptGiverName} entscheidet, welche davon einen Punkt bekommen.`;
     wait.hidden = false;
-    wait.innerHTML = `<div class="waiting-eye" aria-hidden="true">◉</div><p><strong>${escapeHtml(playerName(state.room.promptGiverId))}</strong> bewertet gleich die Fotos. Du kannst sie schon ansehen.</p>`;
+    wait.innerHTML = `<div class="waiting-eye" aria-hidden="true">◉</div><p><strong>${escapeHtml(promptGiverName)}</strong> wählt die passenden Fotos aus.</p>`;
   }
 
   setScreen(view);
@@ -419,8 +436,14 @@ async function loadGallery() {
     }
 
     loading.hidden = true;
+    loading.setAttribute("aria-busy", "false");
     if (wait) wait.hidden = isJudge;
-    form.hidden = !isJudge;
+
+    // Die Galerie ist für alle sichtbar; nur der Begriffsgeber erhält Auswahlfelder und Aktion.
+    form.hidden = false;
+    const actions = $(".sticky-actions", form);
+    if (actions) actions.hidden = !isJudge;
+
     state.galleryRound = state.room.round;
   } catch (error) {
     const loading = document.querySelector("#gallery-loading");
